@@ -52,6 +52,11 @@ public class CounterController {
   }
 
 
+  @PostMapping("/api/test1")
+  ApiResponse test1() {
+    return ApiResponse.ok(1);
+  }
+
   /**
    * 更新计数，自增或者清零
    * @param request {@link CounterRequest}
