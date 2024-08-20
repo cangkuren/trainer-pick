@@ -2,6 +2,7 @@ package com.tencent.wxcloudrun.controller;
 
 import com.tencent.wxcloudrun.config.ApiResponse;
 import com.tencent.wxcloudrun.dto.CounterRequest;
+import com.tencent.wxcloudrun.dto.LoginRequest;
 import com.tencent.wxcloudrun.model.Counter;
 import com.tencent.wxcloudrun.service.CounterService;
 import org.slf4j.Logger;
@@ -54,6 +55,12 @@ public class CounterController {
 
   @PostMapping("/api/test1")
   ApiResponse test1() {
+    return ApiResponse.ok(1);
+  }
+
+  @PostMapping("/api/login")
+  ApiResponse login(@RequestBody LoginRequest request) {
+    logger.info("/api/login request", request);
     return ApiResponse.ok(1);
   }
 
