@@ -61,7 +61,7 @@ public class CounterController {
   @PostMapping("/api/login")
   ApiResponse login(@RequestBody LoginRequest request) {
     logger.info("/api/login request", request);
-    return ApiResponse.ok(1);
+    return ApiResponse.ok(request);
   }
 
   /**
