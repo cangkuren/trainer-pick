@@ -7,16 +7,12 @@ import com.tencent.wxcloudrun.dto.StockInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -26,79 +22,74 @@ import java.util.stream.Collectors;
 @Slf4j
 public class StockListener implements ApplicationListener<ContextRefreshedEvent> {
     public static List<StockInfo> stockInfoList = new LinkedList<>();
+    private final RestTemplate restTemplate;
+
+    public StockListener(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
 
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
-        Thread thread = new Thread(() -> {
-            try {
-                // iphone
-                String url = "https://www.apple.com.cn/shop/pickup-message-recommendations?mts.0=regular&mts.1=compact&cppart=UNLOCKED/WW&searchNearby=true&store=R683&product=MYTM3CH/A";
-                // watch
-                // String url = "https://www.apple.com.cn/shop/fulfillment-messages?searchNearby=true&parts.0=MQFG3CH/A&option.0=MQG03CH/A,MQEP3FE/A&store=R581";
-                String webhooks = "https://open.feishu.cn/open-apis/bot/v2/hook/269714ca-790b-4f6e-8c4e-0eb8dcad85a1";
+        try {
+            // iphone
+            String url = "https://www.apple.com.cn/shop/pickup-message-recommendations?mts.0=regular&mts.1=compact&cppart=UNLOCKED/WW&searchNearby=true&store=R683&product=MYTM3CH/A";
+            // watch
+            // String url = "https://www.apple.com.cn/shop/fulfillment-messages?searchNearby=true&parts.0=MQFG3CH/A&option.0=MQG03CH/A,MQEP3FE/A&store=R581";
+            String webhooks = "https://open.feishu.cn/open-apis/bot/v2/hook/269714ca-790b-4f6e-8c4e-0eb8dcad85a1";
 
-                ObjectMapper objectMapper = new ObjectMapper();
-                while (true) {
-                    HttpRequest request;
-                    try {
-                        request = HttpRequest.newBuilder().uri(new URI(url))
-                                .GET().timeout(Duration.ofSeconds(5)).build();
-                    } catch (URISyntaxException e) {
-                        continue;
-                    }
-                    HttpClient client = HttpClient.newHttpClient();
-                    HttpResponse<String> response;
-                    try {
-                        response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                    } catch (IOException | InterruptedException e) {
-                        continue;
-                    }
-                    log.info("[{}]{}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")), response.body());
-                    Map<String, Object> recommend;
-                    try {
-                        recommend = objectMapper.readValue(response.body(), new TypeReference<>() {
-                        });
-                    } catch (JsonProcessingException e) {
-                        continue;
-                    }
+            ObjectMapper objectMapper = new ObjectMapper();
+            while (true) {
 
-                    stockInfoList = ((List<Map<String, Object>>) ((Map<String, Object>) ((Map<String, Object>) recommend.get("body")).get("PickupMessage")).get("stores"))
-                            .stream()
-                            .filter(x -> !CollectionUtils.isEmpty(x))
-                            .map(x -> (Map<String, Object>) x.get("partsAvailability"))
-                            .filter(x -> !CollectionUtils.isEmpty(x))
-                            .map(Map::values)
-                            .flatMap(x -> x.stream().map(z -> (Map<String, Object>) z)
-                                    .filter(z -> {
-                                        Object partNumber = z.get("partNumber");
-                                        return Objects.nonNull(partNumber) && partNumber.toString().startsWith("MYT");
-                                    })
-                                    .map(y -> (Map<String, Object>) ((Map<String, Object>) y.get("messageTypes")).get("regular"))
-                            )
-                            .map(x -> {
-                                StockInfo stockInfo = new StockInfo();
-                                stockInfo.setStock((String) x.get("storePickupProductTitle"));
-                                String storePickupQuote = (String) x.get("storePickupQuote");
-                                if (storePickupQuote != null) {
-                                    String[] split = storePickupQuote.split("；");
-                                    if (split.length == 2) {
-                                        stockInfo.setPlace(split[1]);
-                                        stockInfo.setPickTime(split[0]);
-                                    }
-                                }
-                                return stockInfo;
-                            }).collect(Collectors.toList());
-
-                    try {
-                        Thread.sleep(500 + new Random().nextInt(200));
-                    } catch (InterruptedException e) {
-                        continue;
-                    }
+                ResponseEntity<String> exchange = restTemplate.exchange(url, HttpMethod.GET, null, String.class);
+                if (!exchange.getStatusCode().is2xxSuccessful()) {
+                    continue;
                 }
-            } catch (Exception e) {
+                String body = exchange.getBody();
+                log.info("[{}]{}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")), body);
+                Map<String, Object> recommend;
+                try {
+                    recommend = objectMapper.readValue(exchange.getBody(), new TypeReference<>() {
+                    });
+                } catch (JsonProcessingException e) {
+                    continue;
+                }
 
+                stockInfoList = ((List<Map<String, Object>>) ((Map<String, Object>) ((Map<String, Object>) recommend.get("body")).get("PickupMessage")).get("stores"))
+                        .stream()
+                        .filter(x -> !CollectionUtils.isEmpty(x))
+                        .map(x -> (Map<String, Object>) x.get("partsAvailability"))
+                        .filter(x -> !CollectionUtils.isEmpty(x))
+                        .map(Map::values)
+                        .flatMap(x -> x.stream().map(z -> (Map<String, Object>) z)
+                                .filter(z -> {
+                                    Object partNumber = z.get("partNumber");
+                                    return Objects.nonNull(partNumber) && partNumber.toString().startsWith("MYT");
+                                })
+                                .map(y -> (Map<String, Object>) ((Map<String, Object>) y.get("messageTypes")).get("regular"))
+                        )
+                        .map(x -> {
+                            StockInfo stockInfo = new StockInfo();
+                            stockInfo.setStock((String) x.get("storePickupProductTitle"));
+                            String storePickupQuote = (String) x.get("storePickupQuote");
+                            if (storePickupQuote != null) {
+                                String[] split = storePickupQuote.split("；");
+                                if (split.length == 2) {
+                                    stockInfo.setPlace(split[1]);
+                                    stockInfo.setPickTime(split[0]);
+                                }
+                            }
+                            return stockInfo;
+                        }).collect(Collectors.toList());
+
+                try {
+                    Thread.sleep(500 + new Random().nextInt(200));
+                } catch (InterruptedException e) {
+                    continue;
+                }
             }
-        });
-        thread.start();
+        } catch (Exception e) {
+
+        }
+
     }
 }
