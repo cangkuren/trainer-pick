@@ -1,6 +1,7 @@
 package com.tencent.wxcloudrun.controller;
 
 import com.tencent.wxcloudrun.config.ApiResponse;
+import com.tencent.wxcloudrun.core.usecase.StockMonitorCoordinator;
 import com.tencent.wxcloudrun.dto.CounterRequest;
 import com.tencent.wxcloudrun.dto.LoginRequest;
 import com.tencent.wxcloudrun.model.Counter;
@@ -22,10 +23,12 @@ public class CounterController {
 
   final CounterService counterService;
   final Logger logger;
+  private final StockMonitorCoordinator stockMonitorCoordinator;
 
-  public CounterController(@Autowired CounterService counterService) {
+  public CounterController(@Autowired CounterService counterService, StockMonitorCoordinator stockMonitorCoordinator) {
     this.counterService = counterService;
     this.logger = LoggerFactory.getLogger(CounterController.class);
+    this.stockMonitorCoordinator = stockMonitorCoordinator;
   }
 
 
@@ -48,6 +51,11 @@ public class CounterController {
   @PostMapping("/api/test")
   ApiResponse test(@RequestBody CounterRequest counterRequest) {
     return ApiResponse.ok(1);
+  }
+
+  @GetMapping("/iStock/monitor")
+  ApiResponse iStockMonitor() {
+    return stockMonitorCoordinator.getStockInfo();
   }
 
 
