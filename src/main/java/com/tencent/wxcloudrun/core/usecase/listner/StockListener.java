@@ -83,8 +83,7 @@ public class StockListener implements ApplicationListener<ContextRefreshedEvent>
 
                 try {
                     Thread.sleep(500 + new Random().nextInt(200));
-                } catch (InterruptedException e) {
-                    continue;
+                } catch (InterruptedException ignored) {
                 }
             }
         } catch (Exception e) {
