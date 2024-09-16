@@ -1,7 +1,6 @@
 package com.tencent.wxcloudrun.core.usecase.listner;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tencent.wxcloudrun.dto.StockInfo;
 import lombok.extern.slf4j.Slf4j;
@@ -46,10 +45,9 @@ public class StockListener implements ApplicationListener<ContextRefreshedEvent>
                 }
                 String body = exchange.getBody();
                 log.info("[{}]{}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")), body);
-                Map<String, Object> recommend;
+                Map<String, Object> recommend = new HashMap<>();
                 try {
-                    recommend = objectMapper.readValue(exchange.getBody(), new TypeReference<>() {
-                    });
+                    recommend = objectMapper.readValue(body, recommend.getClass());
                 } catch (JsonProcessingException e) {
                     continue;
                 }
