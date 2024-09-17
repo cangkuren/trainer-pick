@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Builder
 public class Feishu {
-    String msgType;
-    String content;
+    String msg_type;
+    Content content;
 }

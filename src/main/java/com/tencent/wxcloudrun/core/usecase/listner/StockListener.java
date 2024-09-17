@@ -1,11 +1,13 @@
 package com.tencent.wxcloudrun.core.usecase.listner;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tencent.wxcloudrun.dto.Content;
+import com.tencent.wxcloudrun.dto.Feishu;
 import com.tencent.wxcloudrun.dto.StockInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -29,15 +31,16 @@ public class StockListener implements ApplicationListener<ContextRefreshedEvent>
 
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
-        try {
-            // iphone
-            String url = "https://www.apple.com.cn/shop/pickup-message-recommendations?mts.0=regular&mts.1=compact&cppart=UNLOCKED/WW&searchNearby=true&store=R683&product=MYTM3CH/A";
-            // watch
-            // String url = "https://www.apple.com.cn/shop/fulfillment-messages?searchNearby=true&parts.0=MQFG3CH/A&option.0=MQG03CH/A,MQEP3FE/A&store=R581";
-            String webhooks = "https://open.feishu.cn/open-apis/bot/v2/hook/269714ca-790b-4f6e-8c4e-0eb8dcad85a1";
+        // iphone
+        String url = "https://www.apple.com.cn/shop/pickup-message-recommendations?mts.0=regular&mts.1=compact&cppart=UNLOCKED/WW&searchNearby=true&store=R683&product=MYTM3CH/A";
+        // watch
+        // String url = "https://www.apple.com.cn/shop/fulfillment-messages?searchNearby=true&parts.0=MQFG3CH/A&option.0=MQG03CH/A,MQEP3FE/A&store=R581";
+        String webhooks = "https://open.feishu.cn/open-apis/bot/v2/hook/269714ca-790b-4f6e-8c4e-0eb8dcad85a1";
 
-            ObjectMapper objectMapper = new ObjectMapper();
-            while (true) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        byte[] preBytes = new byte[0];
+        while (true) {
+            try {
 
                 ResponseEntity<String> exchange = restTemplate.exchange(url, HttpMethod.GET, null, String.class);
                 if (!exchange.getStatusCode().is2xxSuccessful()) {
@@ -46,13 +49,10 @@ public class StockListener implements ApplicationListener<ContextRefreshedEvent>
                 String body = exchange.getBody();
                 log.info("[{}]{}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")), body);
                 Map<String, Object> recommend = new HashMap<>();
-                try {
-                    recommend = objectMapper.readValue(body, recommend.getClass());
-                } catch (JsonProcessingException e) {
-                    continue;
-                }
 
-                stockInfoList = ((List<Map<String, Object>>) ((Map<String, Object>) ((Map<String, Object>) recommend.get("body")).get("PickupMessage")).get("stores"))
+                recommend = objectMapper.readValue(body, recommend.getClass());
+
+                List<StockInfo> stockInfos = ((List<Map<String, Object>>) ((Map<String, Object>) ((Map<String, Object>) recommend.get("body")).get("PickupMessage")).get("stores"))
                         .stream()
                         .filter(x -> !CollectionUtils.isEmpty(x))
                         .map(x -> (Map<String, Object>) x.get("partsAvailability"))
@@ -78,15 +78,31 @@ public class StockListener implements ApplicationListener<ContextRefreshedEvent>
                             }
                             return stockInfo;
                         }).collect(Collectors.toList());
+                byte[] bytes = objectMapper.writeValueAsBytes(stockInfos);
+                if (Arrays.equals(preBytes, bytes)) {
+                    continue;
+                }
+                preBytes = bytes;
+                stockInfoList = stockInfos;
+                if (!CollectionUtils.isEmpty(stockInfoList)) {
+                    System.out.println("======找到啦" + stockInfoList + "找到啦======");
+                    Feishu content = new Feishu("text", new Content(stockInfoList.toString()));
+                    HttpEntity<Feishu> entity = new HttpEntity<>(content);
+                    exchange = restTemplate.exchange(webhooks, HttpMethod.POST, entity, String.class);
+                    if (!exchange.getStatusCode().is2xxSuccessful()) {
+                        continue;
+                    }
+                }
 
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+            } finally {
                 try {
-                    Thread.sleep(500 + new Random().nextInt(200));
-                } catch (InterruptedException ignored) {
+                    Thread.sleep(2000 + new Random().nextInt(1000));
+                } catch (InterruptedException e) {
+                    log.error(e.getMessage(), e);
                 }
             }
-        } catch (Exception e) {
-
         }
-
     }
 }
